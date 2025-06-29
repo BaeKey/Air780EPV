@@ -32,9 +32,11 @@ function qyapi.get_access_token(force_refresh)
     local corp_secret = config.WECOM_CORPSECRET
     local agent_id = config.WECOM_AGENTID
 
-    if not corp_id or not corp_secret or not agent_id then
+    if not corp_id or corp_id == "" or not corp_secret or corp_secret == "" or not agent_id or agent_id == "" then
+        log.info("lib_qyapi", "WECOM_CORPID/WECOM_CORPSECRET/WECOM_AGENTID 未配置，无法获取 access_token")
         return nil, "WECOM_CORPID/WECOM_CORPSECRET/WECOM_AGENTID 未配置"
     end
+    
 
     clear_expired_token()
 
