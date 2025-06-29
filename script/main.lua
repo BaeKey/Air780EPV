@@ -10,11 +10,14 @@ require "sysplus" -- http库需要这个sysplus
 -- 添加硬狗防止程序卡死
 wdt.init(9000)
 sys.timerLoopStart(wdt.feed, 3000)
+-- 每秒完整GC一次，防止内存不足问题
+sys.timerLoopStart(function()
+    collectgarbage("collect")
+end, 1000)
 
 -- 设置 DNS
 socket.setDNS(nil, 1, "119.29.29.29")
 socket.setDNS(nil, 2, "223.5.5.5")
-
 -- 开启 IPv6
 mobile.ipv6(true)
 
@@ -28,39 +31,50 @@ log.info("main", "短信转发服务工作中...")
 config = require "config"
 util_http = require "util_http"
 util_notify = require "util_notify"
+qyapi = require "lib_qyapi"
+long_sms_handler = require("long_sms_handler")
 
--- 短信接收回调
+-- 长短信缓冲区定期清理
+long_sms_handler.start_cleanup_task()
+
+-- 短信处理回调函数
+local function handle_complete_sms(sender_number, sms_content, metas, time, is_assembled_long_sms)
+    log.info("smsCallback", time, sender_number, sms_content)
+    
+    if is_assembled_long_sms then
+        log.info("smsCallback", "这是组装后的长短信")
+    end
+
+    -- 短信控制（远程控制设备发送短信给指定号码）
+    local is_sms_ctrl = false
+    local pattern = "^" .. config.SMS_CTRL_IDENTIFIER .. ",(%+?%d+),(.+)$"
+    local receiver_number, sms_content_to_be_sent = sms_content:match(pattern)
+    
+    -- 如果匹配成功，提取接收号码和短信内容并进行转发
+    receiver_number, sms_content_to_be_sent = receiver_number or "", sms_content_to_be_sent or ""
+    if sms_content_to_be_sent ~= "" and receiver_number ~= "" and #receiver_number >= 5 and #receiver_number <= 20 then
+        sms.send(receiver_number, sms_content_to_be_sent)
+        is_sms_ctrl = true
+    end
+
+    -- 发送通知
+    util_notify.add(
+        {
+            "#SMS" .. (is_sms_ctrl and " #CTRL" or ""),
+            "",
+            sms_content,
+            "",
+            "发件号码: " .. sender_number,
+            "发件时间: " .. time
+        }
+    )
+end
+
+-- 设置短信回调
 sms.setNewSmsCb(
-    -- num 手机号码
-    -- txt 文本内容
-    -- metas 短信的元数据,例如发送的时间,长短信编号
-    function(sender_number, sms_content, m)
-        -- 格式：2025/05/15 15:30:22
-        local time = string.format("%d/%02d/%02d %02d:%02d:%02d", m.year + 2000, m.mon, m.day, m.hour, m.min, m.sec)
-        log.info("smsCallback", time, sender_number, sms_content)
-
-        -- 短信控制（远程控制设备发送短信给指定号码）
-        local is_sms_ctrl = false
-        local pattern = "^" .. config.SMS_CTRL_IDENTIFIER .. ",(+?%d+),(.+)$"
-        local receiver_number, sms_content_to_be_sent = sms_content:match(pattern)
-        -- 如果匹配成功，提取接收号码和短信内容并进行转发
-        receiver_number, sms_content_to_be_sent = receiver_number or "", sms_content_to_be_sent or ""
-        if sms_content_to_be_sent ~= "" and receiver_number ~= "" and #receiver_number >= 5 and #receiver_number <= 20 then
-            sms.send(receiver_number, sms_content_to_be_sent)
-            is_sms_ctrl = true
-        end
-
-        -- 发送通知
-        util_notify.add(
-            {
-                "#SMS" .. (is_sms_ctrl and " #CTRL" or ""),
-                "",
-                sms_content,
-                "",
-                "发件号码: " .. sender_number,
-                "发件时间: " .. time
-            }
-        )
+    function(sender_number, sms_content, metas)
+        -- 使用长短信处理模块处理短信
+        long_sms_handler.process_sms(sender_number, sms_content, metas, handle_complete_sms)
     end
 )
 

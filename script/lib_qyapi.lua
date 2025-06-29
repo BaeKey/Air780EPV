@@ -1,34 +1,32 @@
 local qyapi = {}
 
--- 只存储单个token和获取时间
 local access_token = nil
-local token_fetch_time = 0
-local token_expires_in = 0  -- 缓存有效期（秒）
+local token_fetch_time = 0  -- access_token获取时间戳，单位：秒
+local token_expires_in = 0  -- 缓存有效期，单位：秒
 
+-- 获取当前时间的时间戳（秒）
 local function now()
-    return os.time() * 1000
+    return os.time()
 end
 
--- 检查token是否过期
+-- 判断 access_token 是否过期
 local function is_token_expired()
     if not access_token or token_fetch_time == 0 then
         return true
     end
-    local elapsed = (now() - token_fetch_time) / 1000  -- 转换为秒
+    local elapsed = now() - token_fetch_time  -- 秒
     return elapsed >= token_expires_in
 end
 
--- 清理过期的token
 local function clear_expired_token()
     if is_token_expired() then
         access_token = nil
         token_fetch_time = 0
         token_expires_in = 0
-        log.info("util_qyapi", "清理过期的access_token")
+        log.info("lib_qyapi", "清理过期的access_token")
     end
 end
 
--- 获取 access_token（带缓存 + 强制刷新支持）
 function qyapi.get_access_token(force_refresh)
     local corp_id = config.WECOM_CORPID
     local corp_secret = config.WECOM_CORPSECRET
@@ -38,10 +36,8 @@ function qyapi.get_access_token(force_refresh)
         return nil, "WECOM_CORPID/WECOM_CORPSECRET/WECOM_AGENTID 未配置"
     end
 
-    -- 清理过期token
     clear_expired_token()
 
-    -- 如果不强制刷新且token有效，直接返回
     if not force_refresh and access_token and not is_token_expired() then
         return access_token
     end
@@ -53,7 +49,7 @@ function qyapi.get_access_token(force_refresh)
         corp_secret
     )
 
-    log.info("util_qyapi", "请求 access_token:", url)
+    log.info("lib_qyapi", "请求 access_token:", url)
 
     local headers = {["content-type"] = "application/json"}
     local code, _, body = util_http.fetch(nil, "GET", url, headers, nil)
@@ -67,16 +63,14 @@ function qyapi.get_access_token(force_refresh)
         return nil, "gettoken 响应异常: " .. (res.errmsg or "未知错误")
     end
 
-    -- 缓存新token
     access_token = res.access_token
     token_fetch_time = now()
-    token_expires_in = (res.expires_in or 7200) - 60  -- 提前60秒刷新
+    token_expires_in = (res.expires_in or 7200) - 60  -- 秒单位，提前60秒刷新
 
-    log.info("util_qyapi", "缓存 access_token，获取时间:", token_fetch_time, "有效期:", token_expires_in, "秒")
+    log.info("lib_qyapi", "缓存 access_token，获取时间:", token_fetch_time, "有效期:", token_expires_in, "秒")
     return access_token
 end
 
--- 企业微信消息发送（带自动 token 刷新重试）
 function qyapi.send_message(msg)
     local function do_send(token)
         local url = config.WECOM_URL .. "/cgi-bin/message/send?access_token=" .. token
@@ -99,7 +93,7 @@ function qyapi.send_message(msg)
     if code == 200 and body then
         local res = json.decode(body or "{}")
         if res.errcode == 42001 or res.errcode == 40014 then
-            log.warn("util_qyapi", "access_token 可能过期，尝试刷新并重试")
+            log.warn("lib_qyapi", "access_token 可能过期，尝试刷新并重试")
             token = qyapi.get_access_token(true)
             if token then
                 return do_send(token)

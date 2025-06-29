@@ -1,6 +1,6 @@
 ## CORE
 
-EC718PV，合宙Air780EPV 核心固件，支持的功能：gpio，wdt，pm，sms
+EC718PV，合宙Air780EPV 核心固件，支持的功能：gpio，wdt，pm，sms，cjson，pwm
 
 在线编译地址：https://luatos.com/zh_cn/my/build.html
 
@@ -11,3 +11,5 @@ EC718PV，合宙Air780EPV 核心固件，支持的功能：gpio，wdt，pm，sms
 ## API
 
 文档地址：https://docs.openluat.com/osapi/core/
+
+![](images\20250629111602.jpg)
