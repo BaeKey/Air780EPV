@@ -41,8 +41,9 @@ sms.setNewSmsCb(
 
         -- 短信控制（远程控制设备发送短信给指定号码）
         local is_sms_ctrl = false
-        -- 格式：SMS,13800138000,紧急通知，请速回电！
-        local receiver_number, sms_content_to_be_sent = sms_content:match("^SMS,(+?%d+),(.+)$")
+        local pattern = "^" .. config.SMS_CTRL_IDENTIFIER .. ",(+?%d+),(.+)$"
+        local receiver_number, sms_content_to_be_sent = sms_content:match(pattern)
+        -- 如果匹配成功，提取接收号码和短信内容并进行转发
         receiver_number, sms_content_to_be_sent = receiver_number or "", sms_content_to_be_sent or ""
         if sms_content_to_be_sent ~= "" and receiver_number ~= "" and #receiver_number >= 5 and #receiver_number <= 20 then
             sms.send(receiver_number, sms_content_to_be_sent)
@@ -52,11 +53,12 @@ sms.setNewSmsCb(
         -- 发送通知
         util_notify.add(
             {
+                "#SMS" .. (is_sms_ctrl and " #CTRL" or ""),
+                "",
                 sms_content,
                 "",
                 "发件号码: " .. sender_number,
-                "发件时间: " .. time,
-                "#SMS" .. (is_sms_ctrl and " #CTRL" or "")
+                "发件时间: " .. time
             }
         )
     end
@@ -75,7 +77,7 @@ sys.taskInit(
 
         -- 开机通知
         if config.BOOT_NOTIFY then
-            util_notify.add("#设备已成功开机")
+            util_notify.add("设备已成功开机")
         end
 
         -- 开启低功耗模式

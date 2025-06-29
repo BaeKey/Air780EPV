@@ -13,7 +13,13 @@
         return table.concat(msg)
     end
 
+    local qyapi = require("util_qyapi")
+
     local notify = {
+        -- 发送到企业微信
+        ["wecom"] = function(msg)
+            return qyapi.send_message(msg)
+        end,
         -- 发送到 bark
         ["bark"] = function(msg)
             if config.BARK_API == nil or config.BARK_API == "" then
