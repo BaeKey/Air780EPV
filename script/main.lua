@@ -1,41 +1,28 @@
 PROJECT = "air780epv_forwarder"
-VERSION = "0.0.1"
+VERSION = "1.0.0"
 
 log.info("main", PROJECT, VERSION)
 
--- 引入必要的库文件(lua编写), 内部库不需要require
 sys = require("sys")
-require "sysplus" -- http库需要这个sysplus
+require "sysplus"
 
--- 添加硬狗防止程序卡死
 wdt.init(9000)
 sys.timerLoopStart(wdt.feed, 3000)
--- 每秒完整GC一次，防止内存不足问题
-sys.timerLoopStart(function()
-    collectgarbage("collect")
-end, 1000)
 
--- 设置 DNS
 socket.setDNS(nil, 1, "119.29.29.29")
 socket.setDNS(nil, 2, "223.5.5.5")
--- 开启 IPv6
-mobile.ipv6(true)
 
--- SIM 自动恢复时间(单位: 毫秒), 周期性获取小区信息(单位: 毫秒), 搜索小区时最大搜索时间(单位: 秒)
--- 网络遇到严重故障时尝试自动恢复，定时检测网络是否正常(单位: 毫秒)
+mobile.ipv6(true)
 mobile.setAuto(10000, 30000, 8, true, 60000)
 
 log.info("main", "短信转发服务工作中...")
 
--- 加载自定义模块
 config = require "config"
 util_http = require "util_http"
 util_notify = require "util_notify"
 qyapi = require "lib_qyapi"
-long_sms_handler = require("long_sms_handler")
-
--- 长短信缓冲区定期清理
-long_sms_handler.start_cleanup_task()
+sms_handler = require("sms_handler")
+phone_handler = require("phone_handler")
 
 -- 短信处理回调函数
 local function handle_complete_sms(sender_number, sms_content, metas, time, is_assembled_long_sms)
@@ -73,8 +60,8 @@ end
 -- 设置短信回调
 sms.setNewSmsCb(
     function(sender_number, sms_content, metas)
-        -- 使用长短信处理模块处理短信
-        long_sms_handler.process_sms(sender_number, sms_content, metas, handle_complete_sms)
+        -- 使用短信处理模块处理短信
+        sms_handler.process_sms(sender_number, sms_content, metas, handle_complete_sms)
     end
 )
 
@@ -87,6 +74,15 @@ sys.taskInit(
             log.info("Network Ready", data)
         else
             log.error("Timeout")
+        end
+        
+        -- 初始化电话功能模块
+        phone_handler.init()
+        local cc_ready = sys.waitUntil("CC_READY", 10000)
+        if cc_ready then
+            log.info("电话功能已准备就绪")
+        else
+            log.warn("电话功能初始化超时，可能影响通话功能")
         end
 
         -- 开机通知
@@ -111,6 +107,4 @@ sys.taskInit(
 )
 
 -- 用户代码已结束---------------------------------------------
--- 结尾总是这一句
 sys.run()
--- sys.run()之后后面不要加任何语句!!!!!
