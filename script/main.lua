@@ -25,12 +25,8 @@ sms_handler = require("sms_handler")
 phone_handler = require("phone_handler")
 
 -- 短信处理回调函数
-local function handle_complete_sms(sender_number, sms_content, metas, time, is_assembled_long_sms)
-    log.info("smsCallback", time, sender_number, sms_content)
-    
-    if is_assembled_long_sms then
-        log.info("smsCallback", "这是组装后的长短信")
-    end
+local function handle_complete_sms(sender_number, sms_content, metas, time)
+    log.info("smsCallback：", time, sender_number, sms_content)
 
     -- 短信控制（远程控制设备发送短信给指定号码）
     local is_sms_ctrl = false
@@ -95,8 +91,6 @@ sys.taskInit(
             sys.wait(1000 * 15)
             log.warn("main", "即将关闭 usb 电源, 如需查看日志请在配置中关闭低功耗模式")
             sys.wait(1000 * 5)
-            gpio.setup(23, nil)
-            gpio.close(33)
             pm.power(pm.USB, false) -- 关闭 USB
             pm.power(pm.GPS, false)
             pm.power(pm.GPS_ANT, false)
