@@ -4,7 +4,7 @@ local sms_buffer = {}
 
 -- 配置参数
 local WAIT_WINDOW = 3  -- 等待窗口（秒）
-local MAX_CONTENT_LENGTH = 1024  -- 合并后单条消息最大长度 4KB
+local MAX_CONTENT_LENGTH = 1024  -- 合并后单条消息最大长度 1KB
 local MAX_BUFFER_SIZE = 20       -- 最大同时缓存号码数量
 
 -- 格式化时间
