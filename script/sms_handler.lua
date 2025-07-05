@@ -4,13 +4,26 @@ local sms_buffer = {}
 
 -- 配置参数
 local WAIT_WINDOW = 3  -- 等待窗口（秒）
-local MAX_CONTENT_LENGTH = 1024  -- 合并后单条消息最大长度 4KB
+local MAX_CONTENT_LENGTH = 1024  -- 合并后单条消息最大长度 1KB
 local MAX_BUFFER_SIZE = 20       -- 最大同时缓存号码数量
 
 -- 格式化时间
 local function format_time(metas)
     return string.format("%d/%02d/%02d %02d:%02d:%02d", 
         metas.year + 2000, metas.mon, metas.day, metas.hour, metas.min, metas.sec)
+end
+
+-- 将时间元信息转换为时间戳用于排序
+local function metas_to_timestamp(metas)
+    -- metas是table，包含year, mon, day, hour, min, sec等字段
+    return os.time({
+        year = metas.year + 2000,
+        month = metas.mon,
+        day = metas.day,
+        hour = metas.hour,
+        min = metas.min,
+        sec = metas.sec
+    })
 end
 
 -- 清理缓冲区
@@ -31,9 +44,25 @@ local function handle_buffer(sender_number, reason)
 
     log.info("sms_handler", "处理缓冲短信:", sender_number, "原因:", reason)
 
+    -- 按时间排序后拼接内容
+    local merged_content = ""
+    if #buffer.messages > 0 then
+        table.sort(buffer.messages, function(a, b)
+            if a.timestamp == b.timestamp then
+                -- 时间相同时按缓存顺序（index）
+                return a.index < b.index
+            end
+            return a.timestamp < b.timestamp
+        end)
+        
+        for i, msg in ipairs(buffer.messages) do
+            merged_content = merged_content .. msg.content
+        end
+    end
+
     sys.taskInit(function()
         if buffer.callback then
-            local ok, err = pcall(buffer.callback, sender_number, buffer.content, buffer.metas, buffer.first_time, reason)
+            local ok, err = pcall(buffer.callback, sender_number, merged_content, buffer.latest_metas, buffer.first_time, reason)
             if not ok then
                 log.error("sms_handler", "回调异常", err)
             end
@@ -65,26 +94,39 @@ local function check_buffer_limit()
     end
 end
 
--- 合并短信内容
-local function merge_content(old_content, new_content)
-    return  new_content .. old_content
+-- 计算当前缓冲区总长度
+local function calculate_buffer_length(buffer)
+    local total_length = 0
+    for _, msg in ipairs(buffer.messages) do
+        total_length = total_length + #msg.content
+    end
+    return total_length
 end
 
 -- 主要处理函数
 function sms_handler.process_sms(sender_number, sms_content, metas, callback)
     local time_str = format_time(metas)
     local now_ts = os.time()
+    local msg_timestamp = metas_to_timestamp(metas)
     local buffer = sms_buffer[sender_number]
 
     if buffer then
         -- 同号码短信 → 合并
         log.info("sms_handler", "合并同号码短信:", sender_number)
-        buffer.content = merge_content(buffer.content, sms_content)
-        buffer.metas = metas
+        
+        -- 添加新消息到缓冲区
+        table.insert(buffer.messages, {
+            content = sms_content,
+            timestamp = msg_timestamp,
+            index = buffer.msg_counter + 1  -- 用于时间相同时的排序
+        })
+        buffer.msg_counter = buffer.msg_counter + 1
+        buffer.latest_metas = metas
         buffer.last_update = now_ts
 
         -- 检查是否超长
-        if #buffer.content > MAX_CONTENT_LENGTH then
+        local total_length = calculate_buffer_length(buffer)
+        if total_length > MAX_CONTENT_LENGTH then
             handle_buffer(sender_number, "length")
             -- 立即处理新消息作为新缓冲
             sms_handler.process_sms(sender_number, sms_content, metas, callback)
@@ -118,8 +160,13 @@ function sms_handler.process_sms(sender_number, sms_content, metas, callback)
 
         -- 添加到缓冲区
         sms_buffer[sender_number] = {
-            content = sms_content,
-            metas = metas,
+            messages = {{
+                content = sms_content,
+                timestamp = msg_timestamp,
+                index = 1
+            }},
+            msg_counter = 1,
+            latest_metas = metas,
             first_time = time_str,
             last_update = now_ts,
             callback = callback,
