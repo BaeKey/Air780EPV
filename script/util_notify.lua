@@ -100,7 +100,7 @@
     -- @param msg 消息内容
     -- @param channels 通知渠道
     function util_notify.add(msg, channels)
-        if #msg_queue > MAX_QUEUE_LEN then
+        if #msg_queue >= MAX_QUEUE_LEN then
             log.warn("util_notify.add", "消息队列已满，丢弃新消息")
             return
         end
@@ -127,6 +127,21 @@
     -- 发送失败则等待下次轮询
     local function poll()
         local item, result
+        local mobile_reset_count = 0
+        local MOBILE_RESET_LIMIT = 3
+
+        local function tryMobileReset()
+            if mobile_reset_count < MOBILE_RESET_LIMIT then
+                mobile_reset_count = mobile_reset_count + 1
+                log.warn("util_notify", "触发 mobile.reset(), 第 " .. mobile_reset_count .. " 次")
+                mobile.reset()
+                sys.wait(10000)
+            else
+                log.fatal("util_notify", "已达到 mobile.reset 最大次数限制，准备重启设备")
+                rtos.reboot()
+            end
+        end
+
         while true do
             if next(msg_queue) ~= nil and isNet() then
                 log.debug("util_notify.poll", "轮询消息队列中, 当前队列长度:", #msg_queue)
@@ -134,10 +149,10 @@
                 item = msg_queue[1]
                 table.remove(msg_queue, 1)
 
-                if item.retry > (config.NOTIFY_RETRY_MAX or 10) then
+                item.retry = item.retry or 0
+                if item.retry >= (config.NOTIFY_RETRY_MAX or 10) then
                     log.error("util_notify.poll", "超过最大重发次数", "msg:", item.msg)
-                    mobile.reset()
-                    sys.wait(10000)
+                    tryMobileReset()
                 else
                     result = util_notify.send(item.msg, item.channel)
                     item.retry = item.retry + 1
@@ -150,6 +165,10 @@
                 end
                 sys.wait(50)
             else
+                if not isNet() then
+                    log.warn("util_notify.poll", "网络不可用, 尝试重置模块")
+                    tryMobileReset()
+                end
                 sys.waitUntil("NEW_MSG", 1000 * 10)
             end
         end
