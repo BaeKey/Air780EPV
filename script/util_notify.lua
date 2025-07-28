@@ -161,11 +161,13 @@
                         -- 发送失败, 移到队尾
                         table.insert(msg_queue, item)
                         sys.wait(5000)
+                    else
+                        mobile_reset_count = 0
                     end
                 end
                 sys.wait(50)
             else
-                if not isNet() then
+                if next(msg_queue) ~= nil and not isNet() then
                     log.warn("util_notify.poll", "网络不可用, 尝试重置模块")
                     tryMobileReset()
                 end
