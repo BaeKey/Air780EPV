@@ -21,10 +21,10 @@ return {
     BARK_KEY = "",
 
     -- 开机通知 (会消耗流量)
-    BOOT_NOTIFY = false,
+    BOOT_NOTIFY = true,
     -- 每日定时重启配置
     -- 是否启用每日定时重启 (true/false)
-    DAILY_RESTART_ENABLED = true,
+    DAILY_RESTART_ENABLED = false,
     -- 重启时间，24小时制 (0-23)，默认凌晨3点
     DAILY_RESTART_HOUR = 3,
         
@@ -34,5 +34,5 @@ return {
     -- 通知最大重发次数
     NOTIFY_RETRY_MAX = 3,
     -- 开启低功耗模式, USB 断开连接无法查看日志
-    LOW_POWER_MODE = false,
+    LOW_POWER_MODE = true,
 }
