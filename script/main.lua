@@ -12,7 +12,7 @@ sys.timerLoopStart(wdt.feed, 3000)
 socket.setDNS(nil, 1, "119.29.29.29")
 socket.setDNS(nil, 2, "223.5.5.5")
 
-mobile.ipv6(true)
+mobile.ipv6(false)
 mobile.setAuto(10000, 0, 8, true, 60000)
 
 log.info("main", "短信转发服务工作中...")
