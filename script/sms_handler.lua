@@ -17,6 +17,7 @@ local function format_time(metas)
 end
 
 -- 将时间元信息转换为时间戳用于排序
+-- {"tz":32,"min":37,"seqNum":0,"refNum":0,"year":25,"sec":6,"maxNum":0,"mon":8,"hour":11,"day":3}
 local function metas_to_timestamp(metas)
     -- metas是table，包含year, mon, day, hour, min, sec等字段
     return os.time({
